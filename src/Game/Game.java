@@ -6,94 +6,254 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
 import javax.swing.Timer;
 
 public class Game {
-
     public static class Controller {
         final JFrame window;
         Model model;
         View view;
+        Timer stopwatchTimer;
+        int elapsedTime;
+        boolean stopwatchStarted = false;
+        int columns;
+        List<Image> customImages;
 
-        // Constructor
         public Controller(Model model) {
-            this.window = new JFrame("Memory"); // Create the window
-            this.window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);  // Close the window when the user clicks on the close button
-            this.window.setResizable(false); // Disable the resizing of the window
-            this.reset(model); // Reset the game
+            this.columns = model.getColumns();
+            this.window = new JFrame("Memory");
+            this.window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+            this.window.setResizable(false);
+            this.reset(model);
         }
 
-        // Reset the game
+        public void uploadCustomImages() {
+
+            int uploadChoice = JOptionPane.showConfirmDialog(
+                window,
+                "Do you want to upload custom images?",
+                "Custom Images",
+                JOptionPane.YES_NO_OPTION
+            );
+
+            if (uploadChoice == JOptionPane.YES_OPTION) {
+                JOptionPane.showMessageDialog(
+                    window,
+                    "Please upload PNG images of size 120x120 pixels.",
+                    "Image Upload Instructions",
+                    JOptionPane.INFORMATION_MESSAGE
+                );
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setMultiSelectionEnabled(true);
+                fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG Images", "png"));
+
+                int returnValue = fileChooser.showOpenDialog(this.window);
+                if (returnValue == JFileChooser.APPROVE_OPTION) {
+                    File[] selectedFiles = fileChooser.getSelectedFiles();
+                    List<Image> images = new ArrayList<>();
+                    for (File file : selectedFiles) {
+                        try {
+                            Image image = ImageIO.read(file);
+                            images.add(image);
+                        } catch (IOException ex) {
+                            JOptionPane.showMessageDialog(window, "Failed to load image: " + file.getName(), "Error", JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+
+                    if (!images.isEmpty()) {
+                        showImagePreviews(images);
+                        if (images.size() >= columns * columns / 2) {
+                            this.customImages = images;
+                            reset(new Model(columns, customImages));
+                        } else {
+                            JOptionPane.showMessageDialog(window, "Not enough images uploaded! Please upload at least " + (columns * columns / 2) + " images.", "Error", JOptionPane.ERROR_MESSAGE);
+                        }
+                    } else {
+
+                        JOptionPane.showMessageDialog(window, "No images were uploaded. Using default images.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                        reset(new Model(columns));
+                    }
+                } else {
+
+                    JOptionPane.showMessageDialog(window, "Image upload canceled. Using default images.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                    reset(new Model(columns));
+                }
+            } else {
+
+                reset(new Model(columns));
+            }
+        }
+
+        public void showImagePreviews(List<Image> images) {
+
+            JDialog previewDialog = new JDialog(window, "Preview Images", true);
+            previewDialog.setSize(600, 400);
+            previewDialog.setLayout(new BorderLayout());
+
+
+            JPanel thumbnailPanel = new JPanel();
+            thumbnailPanel.setLayout(new GridLayout(2, 2, 10, 10));
+
+
+            for (Image img : images) {
+                JLabel thumbnailLabel = new JLabel();
+                thumbnailLabel.setIcon(new ImageIcon(img.getScaledInstance(100, 100, Image.SCALE_SMOOTH)));
+                thumbnailPanel.add(thumbnailLabel);
+            }
+
+            previewDialog.add(new JScrollPane(thumbnailPanel), BorderLayout.CENTER);
+
+
+            JPanel buttonPanel = new JPanel();
+            JButton confirmButton = new JButton("Continue");
+            buttonPanel.add(confirmButton);
+
+            confirmButton.addActionListener(_ -> {
+                if (images.size() >= columns * columns / 2) {
+                    this.customImages = images;
+                    reset(new Model(columns, customImages));
+                } else {
+                    JOptionPane.showMessageDialog(window, "Not enough images uploaded! Please upload at least " + (columns * columns / 2) + " images.", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+                previewDialog.dispose();
+            });
+
+            previewDialog.add(buttonPanel, BorderLayout.SOUTH);
+            previewDialog.setLocationRelativeTo(window);
+            previewDialog.setVisible(true);
+        }
+
         public void reset(Model model) {
             this.model = model;
             this.view = new View(model);
-            this.window.setVisible(false);
             this.window.setContentPane(view);
             this.window.pack();
             this.window.setLocationRelativeTo(null);
+            this.window.setVisible(true);
+
             for (JButton button : this.model.getButtons()) {
                 button.addActionListener(new ButtonActionListener(this));
             }
-            Utilities.timer(200, (ignored) -> this.window.setVisible(true)); // Show the window after 200ms
+
+            view.getRestartButton().addActionListener(_ -> restartGame());
+            Utilities.timer(200, (ignored) -> this.window.setVisible(true));
+        }
+
+
+        public void restartGame() {
+            stopStopwatch();
+            stopwatchStarted = false;
+            showDifficultySelectionDialog();
+
+        }
+        public void startStopwatch() {
+        if (!stopwatchStarted) {
+            elapsedTime = 0;
+            stopwatchStarted = true;
+            stopwatchTimer = new Timer(1000, _ -> {
+                elapsedTime++;
+                view.getStopwatchLabel().setText("Time: " + elapsedTime + "s");
+            });
+            stopwatchTimer.start();
+        }
+    }
+
+        public void showDifficultySelectionDialog() {
+            String[] options = {"Easy", "Medium", "Hard"};
+            int selectedOption = JOptionPane.showOptionDialog(null,
+                "Select Difficulty",
+                "Memory Game",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.INFORMATION_MESSAGE,
+                null, options, options[0]);
+
+            if (selectedOption == -1) return;
+
+            int gridSize = selectedOption == 0 ? Main.EASY_SIZE :
+                       selectedOption == 1 ? Main.MEDIUM_SIZE : Main.HARD_SIZE;
+
+            this.columns = gridSize;
+
+            uploadCustomImages();
+        }
+
+        public void onMatch() {
+            SoundPlayer.playSound("sounds/90s-game-ui-6-185099.wav");
+        }
+        public void onMisMatch(){
+            SoundPlayer.playSound("sounds/error-8-206492.wav");
+        }
+        public void onWin(){
+            SoundPlayer.playSound("sounds/success-1-6297.wav");
+        }
+
+        public void stopStopwatch() {
+            if (stopwatchTimer != null) {
+                stopwatchTimer.stop();
+            }
+        }
+
+        public int getElapsedTime() {
+            return elapsedTime;
         }
 
         public JFrame getWindow() {
             return this.window;
         }
-
         public Model getModel() {
             return this.model;
         }
-
         public View getView() {
             return this.view;
         }
     }
-
     public static class Model {
-        static final String[] AVAILABLE_IMAGES = {"0.png", "1.png", "2.png", "3.png", "4.png", "5.png", "6.png", "7.png", "8.png"};
+        // Constants for the game
+        static final String[] DEFAULT_IMAGES = new String[]{"0.png", "1.png", "2.png", "3.png", "4.png", "5.png", "6.png", "7.png", "8.png", "9.png", "10.png", "11.png", "12.png", "13.png", "14.png", "15.png", "16.png", "17.png"};
         final ArrayList<JButton> buttons;
-        final int columns; // Number of columns (grid size)
-        int tries; // Number of tries
-        final int maxTries; // Max number of tries
-        boolean gameStarted; // Is the game started?
+        final int columns;
+        boolean gameStarted;
 
-        public Model(int columns, int maxTries) {
-            this.columns = columns;
-            this.maxTries = maxTries; // Set max tries based on difficulty
-            this.buttons = new ArrayList<>();
-            this.tries = maxTries; // Set initial tries
-            this.gameStarted = false;
-
-            int numberOfImage = columns * columns;
-            Vector<Integer> v = new Vector<>();
-            for (int i = 0; i < numberOfImage - numberOfImage % 2; i++) {
-                v.add(i % (numberOfImage / 2));
-            }
-            if (numberOfImage % 2 != 0) v.add(AVAILABLE_IMAGES.length - 1);
-            for (int i = 0; i < numberOfImage; i++) {
-                int rand = (int) (Math.random() * v.size());
-                String reference = AVAILABLE_IMAGES[v.elementAt(rand)];
-                this.buttons.add(new MemoryButton(reference));
-                v.removeElementAt(rand);
-            }
+        public Model(int columns) {
+            this(columns, null);
         }
 
+        public Model(int columns, List<Image> customImages) {
+            this.columns = columns;
+            this.buttons = new ArrayList<>();
+            this.gameStarted = false;
+
+            int numberOfTiles = columns * columns;
+            Vector<Integer> imageIndices = new Vector<>();
+
+            for (int i = 0; i < numberOfTiles / 2; i++) {
+                imageIndices.add(i);
+                imageIndices.add(i);
+            }
+
+            Collections.shuffle(imageIndices);
+
+            for (int i = 0; i < numberOfTiles; i++) {
+                int imageIndex = imageIndices.get(i);
+                Image image;
+                String reference;
+                if (customImages != null && imageIndex < customImages.size()) {
+                    image = customImages.get(imageIndex);  // Use custom image
+                    reference = "custom_" + imageIndex;
+                } else {
+                    reference = DEFAULT_IMAGES[imageIndex % DEFAULT_IMAGES.length];
+                    image = Utilities.loadImage(reference);
+                }
+
+            this.buttons.add(new MemoryButton(image, reference));
+        }
+        }
         public int getColumns() {
             return columns;
         }
-
         public ArrayList<JButton> getButtons() {
             return buttons;
-        }
-
-        public int getTries() {
-            return tries;
-        }
-
-        public void decrementTries() {
-            this.tries--;
         }
 
         public boolean isGameStarted() {
@@ -103,196 +263,171 @@ public class Game {
         public void startGame() {
             this.gameStarted = true;
         }
-
-        public int getMaxTries() {
-            return maxTries;
-        }
     }
 
-    // class to handle the UI of the game
     public static class View extends JPanel {
-        final JLabel triesLabel;
+        private final JButton restartButton;// remove final
+        private final JLabel stopwatchLabel;// remove final
 
         public View(Model model) {
-            this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-            this.triesLabel = new JLabel("", SwingConstants.CENTER);
-            this.triesLabel.setFont(new Font("MV Boli", Font.BOLD, 30));
-            this.triesLabel.setForeground(Color.WHITE);
+            this.setLayout(new BorderLayout());  // Use BorderLayout instead of BoxLayout
 
             JPanel imagePanel = new JPanel();
             int columns = model.getColumns();
             imagePanel.setLayout(new GridLayout(columns, columns));
+
             for (JButton button : model.getButtons()) {
                 imagePanel.add(button);
             }
 
-            setTries(model.getTries());
+            this.add(imagePanel, BorderLayout.CENTER);
 
-            JPanel triesPanel = new JPanel();
-            triesPanel.add(this.triesLabel);
-            triesPanel.setAlignmentX(CENTER_ALIGNMENT);
-            triesPanel.setBackground(new Color(0X8946A6));
-            this.add(triesPanel);
-            this.add(imagePanel);
+            JPanel controlPanel = new JPanel();
+            controlPanel.setLayout(new BorderLayout());
+
+            restartButton = new JButton("Restart Game");
+            controlPanel.add(restartButton, BorderLayout.CENTER);  // Add the restart button at the bottom
+
+            stopwatchLabel = new JLabel("Time: 0s", JLabel.CENTER);
+            controlPanel.add(stopwatchLabel, BorderLayout.NORTH);
+
+            this.add(controlPanel, BorderLayout.SOUTH);
         }
 
-        public void setTries(int triesLeft) {
-            this.triesLabel.setText("Tries left: " + triesLeft);
+        public JButton getRestartButton() {
+            return restartButton;
+
         }
-    }
-
-    // class to handle the button clicks
-    public static class ReferencedIcon extends ImageIcon {
-        final String reference;
-
-        public ReferencedIcon(Image image, String reference) {
-            super(image);
-            this.reference = reference;
-        }
-
-        public String getReference() {
-            return reference;
+        public JLabel getStopwatchLabel() {
+            return stopwatchLabel;
         }
     }
 
-    // class to handle the button on the images
+
     public static class MemoryButton extends JButton {
-        static final String IMAGE_PATH = "";
         static final Image NO_IMAGE = Utilities.loadImage("no_image.png");
-
-        public MemoryButton(String reference) {
-            Image image = Utilities.loadImage(IMAGE_PATH + reference);
+        public MemoryButton(Image image, String reference) {
             Dimension dimension = new Dimension(120, 120);
             this.setPreferredSize(dimension);
             this.setIcon(new ImageIcon(NO_IMAGE));
             this.setDisabledIcon(new ReferencedIcon(image, reference));
         }
-    }
 
-    public static class Dialogs {
-        public static void showLoseDialog(JFrame window) {
-            UIManager.put("OptionPane.background", new Color(0XEA99D5));
-            UIManager.put("Panel.background", new Color(0XEA99D5));
-            JOptionPane.showMessageDialog(window, "You lost, try again!", "You lost!", JOptionPane.INFORMATION_MESSAGE);
-        }
-
-        public static void showWinDialog(JFrame window, Model model) {
-            String message = String.format("Congrats you won!!");
-            UIManager.put("OptionPane.background", new Color(0XEA99D5));
-            UIManager.put("Panel.background", new Color(0XEA99D5));
-            JOptionPane.showMessageDialog(window.getContentPane(), message, "", JOptionPane.INFORMATION_MESSAGE);
+        public void markAsMatched() {
+            this.setBackground(Color.GREEN);
+            this.setOpaque(true);
+            this.setBorderPainted(false);
         }
     }
-
-    // class to handle the button clicks
-    public static class ButtonActionListener implements ActionListener {
+     public static class ButtonActionListener implements ActionListener {
         final Controller controller;
         final Model model;
         final View view;
-        final JFrame window;
         static int disabledButtonCount = 0;
         static JButton lastDisabledButton = null;
-        static final Image TRAP_IMAGE = Utilities.loadImage("no_image.png");
-        final ReferencedIcon trap;
-
         public ButtonActionListener(Controller controller) {
             this.controller = controller;
             this.model = controller.getModel();
             this.view = controller.getView();
-            this.window = controller.getWindow();
-            this.trap = new ReferencedIcon(TRAP_IMAGE, "no_image.png");
         }
 
-        // Method to handle the button clicks and check if two images are same
         @Override
         public void actionPerformed(ActionEvent e) {
             JButton button = (JButton) e.getSource();
             button.setEnabled(false);
             ReferencedIcon thisIcon = (ReferencedIcon) button.getDisabledIcon();
             disabledButtonCount++;
-            if (!model.isGameStarted()) { // If the game has not started
-                model.startGame(); // Start the game
+            if (!model.isGameStarted()) {
+                model.startGame();
+                controller.startStopwatch();
             }
-            if (disabledButtonCount == 2) { // If two buttons are disabled
+            if (disabledButtonCount == 2) {
                 ReferencedIcon thatIcon = (ReferencedIcon) lastDisabledButton.getDisabledIcon();
-                boolean isPair = thisIcon.getReference().equals(thatIcon.getReference()); // Check if the two images are the same
-                if (!isPair) { // If the two images are not the same
-                    model.decrementTries(); // Decrement the number of tries
-                    view.setTries(model.getTries()); // Update the number of tries
-                    JButton lastButton = lastDisabledButton; // Store the last button
-                    Utilities.timer(500, ((ignored) -> { // Wait 500ms before re-enabling the buttons
-                        button.setEnabled(true); // Re-enable the button
-                        lastButton.setEnabled(true); // Re-enable the last button
+                boolean isPair = thisIcon.getReference().equals(thatIcon.getReference());
+                if (isPair) {
+                    ((MemoryButton) button).markAsMatched();
+                    ((MemoryButton) lastDisabledButton).markAsMatched();
+                    controller.onMatch();
+                } else {
+                    controller.onMisMatch();
+                    JButton lastButton = lastDisabledButton;
+                    Utilities.timer(500, ((ignored) -> {
+                        button.setEnabled(true);
+                     lastButton.setEnabled(true);
                     }));
                 }
-                disabledButtonCount = 0; // Reset the counter
+                disabledButtonCount = 0;
             }
-            ArrayList<JButton> enabledButtons = (ArrayList<JButton>) model.getButtons().stream().filter(Component::isEnabled).collect(Collectors.toList());
-            if (enabledButtons.size() == 0) { // If all the buttons are disabled
-                controller.reset(new Model(controller.getModel().getColumns(), controller.getModel().getMaxTries())); // Reset the game
-                Dialogs.showWinDialog(window, model); // Show the win dialog
-            } else if (model.getTries() == 0) { // If there are no more tries
-                controller.reset(new Model(controller.getModel().getColumns(), controller.getModel().getMaxTries())); // Reset the game
-                Dialogs.showLoseDialog(window); // Show the lose dialog
+            List<JButton> enabledButtons = model.getButtons().stream().filter(Component::isEnabled).toList();
+            if (enabledButtons.isEmpty()) {
+                controller.onWin();
+                controller.stopStopwatch();
+                Dialogs.showWinDialog(controller.getWindow(), controller.getElapsedTime());
             }
-            lastDisabledButton = button; // Store the last button
+            lastDisabledButton = button;
+
+        }
+    }
+
+    public static class ReferencedIcon extends ImageIcon {
+        final String reference;
+        public ReferencedIcon(Image image, String reference) {
+            super(image);
+            this.reference = reference;
+        }
+        public String getReference() {
+            return reference;
         }
     }
 
     public static class Utilities {
-        public static Image loadImage(String path) {
-            try {
-                return ImageIO.read(new File(path));
-            } catch (IOException e) {
-                return null;
-            }
+
+        public static void timer(int delay, ActionListener listener) {
+            Timer t = new Timer(delay, listener);
+            t.setRepeats(false);
+            t.start();
         }
 
-        // Method to handle a delay in execution
-        public static void timer(int milliseconds, ActionListener listener) {
-            Timer timer = new Timer(milliseconds, listener);
-            timer.setRepeats(false); // Disable repeats so that the timer only fires once
-            timer.start();
+        public static Image loadImage(String s) {
+        Image image = null;
+        try {
+            InputStream resourceStream = Utilities.class.getResourceAsStream("/" + s);
+            if (resourceStream != null) {
+                image = ImageIO.read(resourceStream);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return image;
+        }
+    }
+    public static class Dialogs {
+        public static void showWinDialog(JFrame window, int elapsedTime) {
+            String message = String.format("Congrats, you won in %d seconds!", elapsedTime);
+
+            JOptionPane.showMessageDialog(
+                window.getContentPane(),
+                message,
+                "You Won!",
+                JOptionPane.INFORMATION_MESSAGE
+            );
         }
     }
 }
+
 class Main {
+    static final int EASY_SIZE = 2;
+    static final int MEDIUM_SIZE = 4;
+    static final int HARD_SIZE = 6;
+
     public static void main(String[] args) {
+        UIManager.put("OptionPane.background", Color.decode("#4290f5"));
+        UIManager.put("Panel.background", Color.decode("#4290f5"));
         Locale.setDefault(Locale.ENGLISH);
+
         SwingUtilities.invokeLater(() -> {
-            String[] options = {"Easy", "Medium", "Hard"};
-            int response = JOptionPane.showOptionDialog(
-                    null,
-                    "Select Difficulty Level",
-                    "Memory Game",
-                    JOptionPane.DEFAULT_OPTION,
-                    JOptionPane.PLAIN_MESSAGE,
-                    null,
-                    options,
-                    options[0]
-            );
-
-            int gridSize = 4; // Default grid size (easy mode)
-            int maxTries = 10; // Default number of tries
-
-            switch (response) {
-                case 0: // Easy
-                    gridSize = 4; // 4x4 grid
-                    maxTries = 15; // More tries
-                    break;
-                case 1: // Medium
-                    gridSize = 6; // 6x6 grid
-                    maxTries = 10;
-                    break;
-                case 2: // Hard
-                    gridSize = 8; // 8x8 grid
-                    maxTries = 5; // Least tries
-                    break;
-                default:
-                    System.exit(0); // Exit if no difficulty is selected
-            }
-
-            new Game.Controller(new Game.Model(gridSize, maxTries));
+            Game.Controller controller = new Game.Controller(new Game.Model(Main.MEDIUM_SIZE));
+            controller.showDifficultySelectionDialog();
         });
     }
 }
