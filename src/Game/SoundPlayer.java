@@ -8,7 +8,6 @@ public class SoundPlayer {
 
     public static void playSound(String soundFile) {
         try {
-            // Open an audio input stream.
             File soundPath = new File(soundFile);
             if (soundPath.exists()) {
                 AudioInputStream audioInput = AudioSystem.getAudioInputStream(soundPath);
