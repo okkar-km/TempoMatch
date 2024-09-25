@@ -108,7 +108,7 @@ public class Controller {
             JButton confirmButton = new JButton("Continue");
             buttonPanel.add(confirmButton);
 
-            confirmButton.addActionListener(_ -> {
+            confirmButton.addActionListener(e -> {
                 if (images.size() >= columns * columns / 2) {
                     this.customImages = images;
                     reset(new Model(columns, customImages));
@@ -135,7 +135,7 @@ public class Controller {
                 button.addActionListener(new ButtonActionListener(this));
             }
 
-            view.getRestartButton().addActionListener(_ -> restartGame());
+            view.getRestartButton().addActionListener(e -> restartGame());
             Utilities.timer(200, (ignored) -> this.window.setVisible(true));
         }
 
@@ -150,9 +150,12 @@ public class Controller {
         if (!stopwatchStarted) {
             elapsedTime = 0;
             stopwatchStarted = true;
-            stopwatchTimer = new Timer(1000, _ -> {
+            stopwatchTimer = new Timer(1000, e -> {
                 elapsedTime++;
-                view.getStopwatchLabel().setText("Time: " + elapsedTime + "s");
+                int hours = elapsedTime / 3600;
+                int minutes = (elapsedTime % 3600) / 60;
+                int seconds = elapsedTime % 60;
+                view.getStopwatchLabel().setText(String.format("Time: %02d:%02d:%02d", hours, minutes, seconds));
             });
             stopwatchTimer.start();
         }
@@ -169,10 +172,8 @@ public class Controller {
 
             if (selectedOption == -1) return;
 
-            int gridSize = selectedOption == 0 ? Main.EASY_SIZE :
-                       selectedOption == 1 ? Main.MEDIUM_SIZE : Main.HARD_SIZE;
-
-            this.columns = gridSize;
+            this.columns = (selectedOption == 0) ? Main.EASY_SIZE :
+                    ((selectedOption == 1) ? Main.MEDIUM_SIZE : Main.HARD_SIZE);
 
             uploadCustomImages();
         }
@@ -191,6 +192,21 @@ public class Controller {
             if (stopwatchTimer != null) {
                 stopwatchTimer.stop();
             }
+        }
+
+        public void showWinDialog(JFrame window, int elapsedTime) {
+            int hours = elapsedTime / 3600;
+            int minutes = (elapsedTime % 3600) / 60;
+            int seconds = elapsedTime % 60;
+
+            String message = String.format("Congrats, you won in %d hour(s), %d minute(s), and %d second(s)!", hours, minutes, seconds);
+
+            JOptionPane.showMessageDialog(
+                window.getContentPane(),
+                message,
+                "You Won!",
+                JOptionPane.INFORMATION_MESSAGE
+            );
         }
 
         public int getElapsedTime() {

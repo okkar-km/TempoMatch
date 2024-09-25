@@ -26,7 +26,7 @@ public class View extends JPanel {
         restartButton = new JButton("Restart Game");
         controlPanel.add(restartButton, BorderLayout.CENTER);
 
-        stopwatchLabel = new JLabel("Time: 0s", JLabel.CENTER);
+        stopwatchLabel = new JLabel("Time: 00:00:00", JLabel.CENTER);
         controlPanel.add(stopwatchLabel, BorderLayout.NORTH);
 
         this.add(controlPanel, BorderLayout.SOUTH);

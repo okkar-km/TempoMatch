@@ -53,7 +53,7 @@ public class ButtonActionListener implements ActionListener {
         if (enabledButtons.isEmpty()) {
             controller.onWin();
             controller.stopStopwatch();
-            Dialogs.showWinDialog(controller.getWindow(), controller.getElapsedTime());
+            controller.showWinDialog(controller.getWindow(), controller.getElapsedTime());
         }
         lastDisabledButton = button;
     }

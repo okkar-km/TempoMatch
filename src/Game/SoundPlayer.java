@@ -18,7 +18,7 @@ public class SoundPlayer {
                 System.out.println("Sound file not found: " + soundFile);
             }
         } catch (UnsupportedAudioFileException | IOException | LineUnavailableException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 }

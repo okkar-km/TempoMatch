@@ -22,7 +22,7 @@ public class Utilities {
                 image = ImageIO.read(resourceStream);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
         return image;
     }
